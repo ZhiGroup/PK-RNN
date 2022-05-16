@@ -63,6 +63,7 @@ Following is the table of 41 z-score normalized continuous variables used in the
 |38| Blood Basophils Percentage| 0.566043   | 0.522798   |
 |39| Blood Basophils Counts| 0.091768   | 0.067752   |
 |40| White Blood Cell| 10.865301  | 7.446581   |
+
 The catogorical variables consist of medication code. The medication code are first mapped to integers and then transformed into embeddings, the mapping between medication code used in this study and integers is stored in `code_dict.pkl`.
 ## VTDM
 This code also contains a reference implementation of a 2-compartment Bayesian vancomycin therapeutic drug monitoring model (VTDM). VTDM takes the following input:
