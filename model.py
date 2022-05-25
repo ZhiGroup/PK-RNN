@@ -4,19 +4,20 @@ from torch.optim import SGD
 
 
 class EHREmbeddings(nn.Module):
-    def __init__(self, vocab_size, embed_dim):
+    def __init__(self, vocab_size, embed_dim, device="cpu"):
         super().__init__()
         self.embed_dim = embed_dim
         self.embed = nn.Embedding(vocab_size, self.embed_dim)
+        self.device = device
 
-    def forward(self, input, device="cpu"):
+    def forward(self, input):
         ContTensor, CatTensor, LabelTensor, DoseTensor, TimeDiffTensor,VTensor, VancoElTensor, PtList, LengList = input
-        CatTensor = CatTensor.to(device)
-        ContTensor = ContTensor.to(device)
-        LabelTensor = LabelTensor.to(device)
-        DoseTensor = DoseTensor.to(device)
-        TimeDiffTensor = TimeDiffTensor.to(device)
-        VancoClTensor = VancoElTensor.to(device)
+        CatTensor = CatTensor.to(self.device)
+        ContTensor = ContTensor.to(self.device)
+        LabelTensor = LabelTensor.to(self.device)
+        DoseTensor = DoseTensor.to(self.device)
+        TimeDiffTensor = TimeDiffTensor.to(self.device)
+        VancoClTensor = VancoElTensor.to(self.device)
         catEmb = self.embed(CatTensor)
         outEmb = torch.sum(catEmb, dim=2)
         outEmb = torch.cat((outEmb, ContTensor), dim=2)
@@ -35,7 +36,7 @@ class PK_RNN(nn.Module):
                  device="cpu"
                  ):
         super().__init__()
-        self.emb = EHREmbeddings(vocab_size, embed_dim)
+        self.emb = EHREmbeddings(vocab_size, embed_dim, device)
         self.hidden_size = hidden_size
         self.cell = nn.GRUCell(embed_dim+cont_size+1, hidden_size, device=device)
         self.use_v_from_weight = paramdict['use_v_from_weight']
