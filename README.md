@@ -1,6 +1,6 @@
 # PK-RNN-V
 This repo contains the official reference implementation for the paper 
->**PK-RNN-V E: A Deep Learning Model Approach to Vancomycin Therapeutic Drug Monitoring Using Electronic Health Record Data**<br>Nigo Masayuki, Hong Thoai Nga Tran, Ziqian Xie, Han Feng, Laila Bekhet, Miao Hongyu, Degui Zhi
+>**PK-RNN-V E: A Deep Learning Model Approach to Vancomycin Therapeutic Drug Monitoring Using Electronic Health Record Data**<br>Nigo Masayuki, Hong Thoai Nga Tran, Ziqian Xie, Han Feng, Laila Rasmy, Miao Hongyu, Degui Zhi
 ## Requirements
 - Python 3.9
 - The required Python package can be installed using `pip install -r requirements.txt`
