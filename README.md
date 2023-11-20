@@ -27,7 +27,7 @@ We won't provide the original dataset we used to develop the PKRNN-2CM model, bu
 
 ### Model training and evaluation
 
-Please follow the steps in the notebook [main.ipynb](https://github.com/BingyuMao/vanco_2cm/blob/main/main.ipynb) to run the PKRNN-2CM model. This notebook also includes the steps for model evaluation.
+Please follow the steps in the notebook [main.ipynb](https://github.com/ZhiGroup/PK-RNN/blob/PKRNN-2CM/main.ipynb) to run the PKRNN-2CM model. This notebook also includes the steps for model evaluation.
 
 ## Results
 
