@@ -8,9 +8,9 @@ The PKRNN-2CM model integrates an RNN for PK parameter estimation and a 2CM PK m
 
 <img src="PKRNN-2CM model architecture.png"/> <br>
 
-Please refer to our paper
+Please refer to our preprint
 
->**A deep-learning-based two-compartment predictive model (PKRNN-2CM) for vancomycin therapeutic drug monitoring**<br>Bingyu Mao, Ziqian Xie, Masayuki Nigo, Laila Rasmy, Degui Zhi
+>[**A deep-learning-based two-compartment predictive model (PKRNN-2CM) for vancomycin therapeutic drug monitoring**](https://www.medrxiv.org/content/10.1101/2024.01.30.24302025v1)<br>Bingyu Mao, Ziqian Xie, Masayuki Nigo, Laila Rasmy, Degui Zhi
 
 for more details.
 
@@ -43,4 +43,4 @@ Please post a GitHub issue if you have any questions.
 
 Please acknowledge the following work in papers or derivative software:
 
-Bingyu Mao, Ziqian Xie, Masayuki Nigo, Laila Rasmy, and Degui Zhi. "A deep-learning-based two-compartment predictive model (PKRNN-2CM) for vancomycin therapeutic drug monitoring."
+Mao, B., Xie, Z., Nigo, M., Rasmy, L., & Zhi, D. (2024). A deep-learning-based two-compartment predictive model (PKRNN-2CM) for vancomycin therapeutic drug monitoring (p. 2024.01.30.24302025). medRxiv. https://doi.org/10.1101/2024.01.30.24302025
