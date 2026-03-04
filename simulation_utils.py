@@ -77,12 +77,16 @@ def get_new_time(d, t, loc, sim_type):
         if len(dn_idx) <= 2: #if there are 1 or 2 doses, only add at the first dose
             get_tadd(dn_idx[0], tadd, loc)
         else: #if this patient has more than 2 doses, add new time points for the early half doses
-            for j in range(int(len(dn_idx)/2)):
-                get_tadd(dn_idx[j], tadd, loc)
+            random.seed(0)
+            for idx in random.sample(range(len(dn_idx)), k=len(dn_idx)//2):
+                get_tadd(dn_idx[idx], tadd, loc)
     else:
         raise ValueError("Invalid 'sim_type' parameter. Must be 'add_half' or 'add_all' to get new time steps.")
 
-    tnew = np.sort(np.concatenate((t, np.array(tadd))))
+    #filter out tadd values that already exist in t to avoid duplicate time entries
+    tadd = [ta for ta in tadd if ta not in t]
+    
+    tnew = np.sort(np.concatenate((t, np.array(tadd)))) if len(tadd) > 0 else t.copy()
     #index list for the same elements        
     tidx = np.arange(tnew.shape[0])[np.in1d(tnew,t)]
     #index list for different elements 
@@ -95,74 +99,72 @@ def get_new_time(d, t, loc, sim_type):
 def move_label_to_peak(cat, cont, dose, time, label):
     new_label = label.copy()
     new_time = time.copy()
+    cat_new = cat.copy()
+    cont_new = cont.copy()
     
     new_label = shift_back(new_label)
+    
+    #compute template once from the original unmodified cat
+    cat_templ = [k for k, v in Counter(cat.flatten().tolist()).items() if v==cat.shape[0]] 
+    cat_templ.extend(0 for _ in range(cat.shape[1]-len(cat_templ)))
+    
     for i in range(len(label)):
         if label[i] != 0:
-            last_dose_index = np.where(dose[:i+1] != 0)[0][-1]  # Find the index of the last nonzero dose before the label
-            time_diff = time[i] - time[last_dose_index] # Time difference between the last dose and the label
+            last_dose_index = np.where(dose[:i+1] != 0)[0][-1]
+            time_diff = time[i] - time[last_dose_index]
             
             if dose[last_dose_index] > 1 and time_diff > 3:
-                new_time[last_dose_index + 1] = time[last_dose_index] + 3  # Set the label time to the peak time
-                # Set the label value to the predicted value at the peak time
+                new_time[last_dose_index + 1] = time[last_dose_index] + 3
                 new_label[last_dose_index + 1] = 0
-
             elif dose[last_dose_index] <= 1 and time_diff > 2:
                 new_time[last_dose_index + 1] = time[last_dose_index] + 2
                 new_label[last_dose_index + 1] = 0
             
-            #get new cat and cont
-            #set a temprary list for to add necessary information to the CatTensor
-            #contains codes that occur in every visit for this patient
-            cat_templ = [k for k, v in Counter(cat.flatten().tolist()).items() if v==cat.shape[0]] 
-            #extend the list the same length as other sequences
-            cat_templ.extend(0 for _ in range(cat.shape[1]-len(cat_templ)))
-            
-            # Move the corresponding elements in Cat and Cont to the peak
-            cat = np.delete(cat, i, axis=0) # Delete the previous element
-            cat = np.insert(cat, last_dose_index + 1, cat_templ, axis = 0) # Insert the same element at peak
-            cont = np.delete(cont, i, axis=0)
-            cont = np.insert(cont, last_dose_index + 1, last_dose_index, axis = 0)
+            #place template data at peak position directly (no delete+insert)
+            cat_new[last_dose_index + 1] = cat_templ
+            cont_new[last_dose_index + 1] = last_dose_index
 
             # Set the previous nonzero label to 0
             if last_dose_index + 1 != i:
                 new_label[i] = 0
     
     new_label = shift_forward(new_label)
-    return cat, cont, new_time, new_label
+    return cat_new, cont_new, new_time, new_label
 
 
 def move_label_to_trough(cat, cont, dose, time, label):
     new_label = label.copy()
     new_time = time.copy()
+    cat_new = cat.copy()
+    cont_new = cont.copy()
 
     new_label = shift_back(new_label)
+    
+    #compute template once from the original unmodified cat
+    cat_templ = [k for k, v in Counter(cat.flatten().tolist()).items() if v==cat.shape[0]]
+    cat_templ.extend(0 for _ in range(cat.shape[1]-len(cat_templ)))
+    
     for i in range(len(label)):
         if label[i] != 0:
             if len(np.where(dose[i:] != 0)[0]) > 0: # Make sure the next dose exists
-                next_dose_index = np.where(dose[i:] != 0)[0][0]  + i # Find the index of the next nonzero dose after the label
+                next_dose_index = np.where(dose[i:] != 0)[0][0]  + i
                 last_dose_index = np.where(dose[:i+1] != 0)[0][-1]
                 time_diff = time[next_dose_index] - time[i]
                 
                 if time_diff > 1:
-                    new_time[next_dose_index - 1] = time[next_dose_index] - 1  # Set the label time to the trough time
+                    new_time[next_dose_index - 1] = time[next_dose_index] - 1
                     new_label[next_dose_index - 1] = 0
                     
-                    #move Cat and Cont
-                    cat_templ = [k for k, v in Counter(cat.flatten().tolist()).items() if v==cat.shape[0]]
-                    cat_templ.extend(0 for _ in range(cat.shape[1]-len(cat_templ)))
-
-                    cat = np.delete(cat, i, axis=0) # Delete the previous element
-                    cat = np.insert(cat, next_dose_index - 1, cat_templ, axis = 0) # Insert the same element at trough
-                    cont = np.delete(cont, i, axis=0)
-                    cont = np.insert(cont, next_dose_index - 1, next_dose_index - 2, axis = 0)
+                    #place template data at trough position directly (no delete+insert)
+                    cat_new[next_dose_index - 1] = cat_templ
+                    cont_new[next_dose_index - 1] = next_dose_index - 2
 
                     # Set the previous nonzero label to 0
                     if last_dose_index + 1 != i:
                         new_label[i] = 0
 
     new_label = shift_forward(new_label)
-    return cat, cont, new_time, new_label
+    return cat_new, cont_new, new_time, new_label
 
 def sim_data(ptlist, loc, sim_type, real_data):
     #add measurements (change labels, and also add values to other tensors)
@@ -194,8 +196,9 @@ def sim_data(ptlist, loc, sim_type, real_data):
             #update label
             lnew = np.zeros(len(tnew))
             #put the original lb values into the new array
-            for l in range(len(lb)):
-                lnew[tidx[l]]=lb[l]
+            if real_data != 'remove':
+                for l in range(len(lb)):
+                    lnew[tidx[l]]=lb[l]
             
             #get new cat and cont
             #set a temprary list for to add necessary information to the CatTensor
@@ -204,19 +207,22 @@ def sim_data(ptlist, loc, sim_type, real_data):
             #extend the list the same length as other sequences
             templ.extend(0 for _ in range(cat.shape[1]-len(templ)))
             
-            #use this list to check the location to add elements
-            idxl=[]
-            for tempidx in range(len(tidx)):
-                idxl.append(tidx[tempidx]-tempidx)
-        
-            for i in range(1, len(idxl)):
-                if idxl[i]-idxl[i-1]==1: #there is one measurment added
-                    cat = np.insert(cat, i, templ, axis = 0)
-                    cont = np.insert(cont, i, i-1, axis = 0)
-                elif idxl[i]-idxl[i-1]>1: #more than one measurements are added continuously
-                    for j in range(1, idxl[i]-idxl[i-1]+1):
-                        cat = np.insert(cat, i, templ, axis = 0)
-                        cont = np.insert(cont, i, i-1, axis = 0)
+            #build new cat and cont arrays directly using index mapping
+            cat_new = np.zeros((len(tnew), cat.shape[1]), dtype=cat.dtype)
+            cont_new = np.zeros((len(tnew), cont.shape[1]), dtype=cont.dtype)
+            
+            #place original rows at their mapped positions
+            for orig_i, new_i in enumerate(tidx):
+                cat_new[new_i] = cat[orig_i]
+                cont_new[new_i] = cont[orig_i]
+            
+            #fill new time point rows with template values
+            for new_i in tidx_n:
+                cat_new[new_i] = templ
+                cont_new[new_i] = new_i - 1  #reference preceding position
+            
+            cat = cat_new
+            cont = cont_new
             
             #update related arrays
             dnew = dnew.astype(np.float32)
@@ -345,32 +351,31 @@ def simulate_move(dataset, loc, sim_type = 'move', real_data = 'remove'):
         pt_list = group['PtList'][:]
         
         #------------------- Step 2: update the data for every patient based on options -------------------#
-        if len(pt_list) == 50:
-            for idx in range(len(pt_list)):        
-                ptid = pt_list[idx]
-                t = np.cumsum(td[idx])
-                t = shift_back(t)
-                
-                #if sim_type == 'move': #the sequence length will remain the same
-                if loc == 'peak':
-                    cat[idx], cont[idx], time, label = move_label_to_peak(cat[idx], cont[idx], d[idx], t, lb[idx])
-                elif loc == 'trough':
-                    cat[idx], cont[idx], time, label = move_label_to_trough(cat[idx], cont[idx], d[idx], t, lb[idx])
-                else:
-                    raise ValueError("Invalid 'loc' parameter. Must be 'peak' or 'trough' to get new time steps for the sim_type 'move'.")
-                
-                #update related arrays
-                td_new = np.diff(time)
-                td_new = np.insert(td_new, len(td_new), 0)
-                td[idx] = td_new/24
-    
-                #shift label and mask tensors back to normal
-                mnew = np.where(label==0, 0, 1)
-                #label = shift_forward(label)
-                label = label.astype(np.float32)
-                lb[idx] = label
-                #mnew = shift_forward(mnew)
-                m[idx] = mnew
+        for idx in range(len(pt_list)):        
+            ptid = pt_list[idx]
+            t = np.cumsum(td[idx])
+            t = shift_back(t)
+            
+            #if sim_type == 'move': #the sequence length will remain the same
+            if loc == 'peak':
+                cat[idx], cont[idx], time, label = move_label_to_peak(cat[idx], cont[idx], d[idx], t, lb[idx])
+            elif loc == 'trough':
+                cat[idx], cont[idx], time, label = move_label_to_trough(cat[idx], cont[idx], d[idx], t, lb[idx])
+            else:
+                raise ValueError("Invalid 'loc' parameter. Must be 'peak' or 'trough' to get new time steps for the sim_type 'move'.")
+            
+            #update related arrays
+            td_new = np.diff(time)
+            td_new = np.insert(td_new, len(td_new), 0)
+            td[idx] = td_new/24
+
+            #shift label and mask tensors back to normal
+            mnew = np.where(label==0, 0, 1)
+            #label = shift_forward(label)
+            label = label.astype(np.float32)
+            lb[idx] = label
+            #mnew = shift_forward(mnew)
+            m[idx] = mnew
         
         group['ContTensor'][:] = cont
         group['CatTensor'][:] = cat   

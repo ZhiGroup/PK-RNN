@@ -19,21 +19,28 @@ from models import EHREmbeddings, PKRNN_2CM
 import utils as ut
 import simulation_utils as ut1
 
+#check GPU availability
+#use_cuda = torch.cuda.is_available()
+
 #function to set the random seed manually
 def set_seed(manualSeed):
     np.random.seed(manualSeed)
     random.seed(manualSeed)
     torch.manual_seed(manualSeed)
+
     torch.cuda.manual_seed(manualSeed)
     torch.cuda.manual_seed_all(manualSeed)
+
     torch.backends.cudnn.enabled = False 
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
+
 
 #  --------------------- Class for embedding --------------------- #
 class DataFromH5py:    
     def __init__(self, file):
         self.file = file
+
     def get_batch(self):
         datasets = []
         with h5py.File(self.file, 'r') as f:
@@ -43,15 +50,16 @@ class DataFromH5py:
                 for index, subdata in data.items():
                         group_key = ['ContTensor', 'CatTensor', 'LabelTensor', 'MaskTensor', 'DoseTensor', 'TimeDiffTensor', 'VTensor', 'VancoClTensor', 'PtList', 'LengList']  #use this to ensure order
                         list_key = ['PtList', 'LengList']
-                        loader.append([subdata[key].value.tolist() if key in list_key 
-                                                                   else torch.from_numpy(subdata[key].value) for key in group_key])
+                        loader.append([subdata[key][()].tolist() if key in list_key 
+                                                                   else torch.from_numpy(subdata[key][()]) for key in group_key])
                 datasets.append(loader)
                 print(f'Batch loaded for {setname} set! {len(loader)} items included')
+
         return datasets
     
     def get_dictionary(self):
         with h5py.File(self.file, 'r') as f:
-            dictionary = f['CodeDict']['data'][()]  
+            dictionary = f['CodeDict']['data'][()].decode()  
         dictionary = ast.literal_eval(dictionary)
         print(f'Dictionary loaded! {len(dictionary)} items included')
         return dictionary
@@ -103,6 +111,8 @@ def run_model(inFile, device, paramdict, dataFile = '', embed_dim = 8, hidden_si
     print('> Hyperparams used: \n', model_header)
     print(colored(f'{"="*90}\n', 'green'))
 
+    print(model)
+    print(summary(model))
     
     #main training function
     if simulation != True:

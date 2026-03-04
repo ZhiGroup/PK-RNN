@@ -3,7 +3,8 @@ from __future__ import print_function, division
 import math, time, os, sys, h5py, random, shutil, torch
 from math import sqrt
 import numpy as np
-from collections import defaultdict, Counter
+from collections import defaultdict
+from collections import Counter
 from termcolor import colored
 from sklearn.metrics import mean_squared_error as MSE
 
@@ -31,9 +32,10 @@ def iter_batch2(iterable, samplesize):
     return results
 
 #  --------------------- Major model training utilities --------------------- #
+
 def trainsample(sample, model, optimizer):
     model.zero_grad()
-    eta1, eta2, eta3, eta4, k1, k2, v1, v2, lb, pred, ccl, d, td, mask, LengList, PtList, loss = model(sample)  # BP
+    eta1, eta2, eta3, eta4, k1, k2, v1, v2, lb, pred, ccl, d, td, mask, LengList, PtList, loss, auc = model(sample)  # BP
     
     # FOR DEBUG PURPOSE
     # If there is any wrong in models.py, the loss would be returned as 1. 
@@ -49,7 +51,8 @@ def trainsample(sample, model, optimizer):
     
     loss.backward()    
     optimizer.step()
-    return pred, lb, loss.item()
+    return pred, lb, loss.item()  # BP
+
 
 # train with loaders
 def trainbatches(loader, model, optimizer):  
@@ -72,7 +75,7 @@ def calculate_Error(model, loader):
 
     with torch.no_grad():
         for i, batch in enumerate(loader):           
-            eta1, eta2, eta3, eta4, k1, k2, v1, v2, lb, output,ccl, d, td, mask, LengList, PtList, loss = model(batch)
+            eta1, eta2, eta3, eta4, k1, k2, v1, v2, lb, output, ccl, d, td, mask, LengList, PtList, loss, auc = model(batch)
             
             PtLists.append(PtList)
             eta1s.append(eta1)
@@ -100,10 +103,12 @@ def calculate_Error(model, loader):
             y_real.extend(label_tensor.cpu().data.view(-1).numpy())
         
     error = sqrt(MSE(np.asarray(y_real), np.asarray(y_hat)))
+
     return error, y_real, y_hat, PtLists, eta1s, eta2s, eta3s, eta4s, k1s, k2s, v1s, v2s, lbs, ccls, ds, tds, masks, LengLists
 
 
-def save_results(dataFile, model_header,stats_data, best_train_result, best_valid_result, best_test_result):    
+def save_results(dataFile, model_header,stats_data, best_train_result, best_valid_result, best_test_result):
+    
     if os.path.isfile(dataFile) :
         print('Remove existing file, save results to ', dataFile)
         os.remove(dataFile)      
@@ -142,13 +147,15 @@ def save_results(dataFile, model_header,stats_data, best_train_result, best_vali
 #  --------------------- Main function to train the model --------------------- #
 
 def epochs_run(epochs, train, valid, test, model, stats_data, optimizer, patience=10,
-               output_dir='results/', output_header='PKRNN_2CM', model_header='', dataFile = 'datafile'):    
+               output_dir='results/', output_header='PKRNN_2CM', model_header='', dataFile = 'datafile'):
+    
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
     bestValidError = 1000000000000000.0
     bestTestError = 0.0
     bestValidEpoch = 0
+
     header = 'Train_Error | Valid_Error | Test_Error | Train_time | Valid_time | Test_Error | Epoch | Average_loss'
     logFile = output_dir + output_header + '.log'
     print2file(model_header, logFile)
@@ -160,15 +167,19 @@ def epochs_run(epochs, train, valid, test, model, stats_data, optimizer, patienc
         model = model.train()
         current_loss, train_loss = trainbatches(loader=train, model=model, optimizer=optimizer)
         avg_loss = np.mean(train_loss)
-        train_time = timeSince(start)        
+        train_time = timeSince(start)
+        
         # evaluation
         model = model.eval()
+
         train_result = calculate_Error(model=model, loader=train)
         train_Error = train_result[0]
+        
         valid_start = time.time()
         valid_result = calculate_Error(model=model, loader=valid)
         valid_Error = valid_result[0]
         valid_time = timeSince(valid_start)
+        
         test_start = time.time()
         test_result = calculate_Error(model=model, loader=test)
         test_Error = test_result[0]
@@ -176,22 +187,27 @@ def epochs_run(epochs, train, valid, test, model, stats_data, optimizer, patienc
 
         pFile = '%s | %s | %s| %s | %s | %s | %s | %s' % (train_Error, valid_Error, test_Error, train_time, valid_time, test_time, ep, avg_loss)  
         print2file(pFile, logFile)
+
         if valid_Error < bestValidError:
             bestValidError = valid_Error
             bestTrainError = train_Error
             bestValidEpoch = ep
             best_model = model
-            bestTestError = test_Error          
+            bestTestError = test_Error
+            
             best_test_result = test_result 
             best_valid_result = valid_result           
-            best_train_result = train_result              
+            best_train_result = train_result   
+            
         if ep - bestValidEpoch > patience:
             break
 
-        print('Epoch %2s | Best Train Error: %4s | Best Valid Error %4s | Best Test Error: %4s' %(ep, bestTrainError, bestValidError, bestTestError), end="\r", flush=True)        
+        print('Epoch %2s | Best Train Error: %4s | Best Valid Error %4s | Best Test Error: %4s' %(ep, bestTrainError, bestValidError, bestTestError), end="\r", flush=True)
+        
         # save model & parameters
         torch.save(best_model, output_dir + output_header + '.pth')
         torch.save(best_model.state_dict(), output_dir + output_header + '.st')
+
     # Record in the log file the final best valid Error and train Error
     pFile = 'Best Train Error of %f | Best Valid Error %f | Test Error of %f at epoch %d ' % (bestTrainError, bestValidError, bestTestError, bestValidEpoch)
     print('\n')
@@ -199,7 +215,8 @@ def epochs_run(epochs, train, valid, test, model, stats_data, optimizer, patienc
  
     ################# SAVE RESULTS ##################
     dataFile = output_dir + dataFile
-    save_results(dataFile, model_header, stats_data, best_train_result, best_valid_result, best_test_result)    
+    save_results(dataFile, model_header, stats_data, best_train_result, best_valid_result, best_test_result)
+    
     return bestTrainError, bestValidError, bestTestError, bestValidEpoch
 
 
@@ -233,7 +250,7 @@ def sim_data(ptlist, ptcheck, concn_dict, real_data):
         ptd[pt_id] = td_check
     
     for pt in range(len(ptlist)):
-        lb = ptlist[pt][3]       #LabelTensor
+        lb = ptlist[pt][3]        #LabelTensor
         m = ptlist[pt][5]        #MaskTensor
         ptid = ptlist[pt][6]     #PtList
         td = 24 * ptlist[pt][7]  #TimeDiffTensor
@@ -254,9 +271,17 @@ def sim_data(ptlist, ptcheck, concn_dict, real_data):
         oldt = np.cumsum(oldtd)
         oldt = np.insert(oldt, 0, 0)
         oldt = np.delete(oldt, -1)
-        #index list for different elements 
-        tidx = np.arange(t.shape[0])[np.in1d(t,oldt)]
-        tidx_n = np.arange(t.shape[0])[~np.in1d(t,oldt)]
+        #match positions sequentially (merge-based) to handle duplicate times correctly
+        tidx, tidx_n = [], []
+        j = 0  #pointer into oldt
+        for i in range(len(t)):
+            if j < len(oldt) and np.isclose(t[i], oldt[j]):
+                tidx.append(i)
+                j += 1
+            else:
+                tidx_n.append(i)
+        tidx = np.array(tidx)
+        tidx_n = np.array(tidx_n)
     
         if len(tidx_n) > 0:
             for i in tidx_n:
@@ -265,21 +290,26 @@ def sim_data(ptlist, ptcheck, concn_dict, real_data):
                 for j in tidx:
                     lb[j] = 0
         m = np.where(lb==0, 0, 1)
+        
+        #-------------------Step 4: set original values to the new values-------------------#
         ptlist[pt][3] = lb
         ptlist[pt][5] = m
         ptlist[pt][7] = td/24
+
     
     return ptlist
 
 
-def update_batch(ptlist):    
+def update_batch(ptlist):
+    
     #devide the original list to batches, prepare to replace the old data
     def dev(ptlist):
         bs = 50 #batch size
         pt_batch = [ptlist[i:i + bs] for i in range(0, len(ptlist), bs)]
         return pt_batch
     
-    ptb = dev(ptlist)    
+    ptb = dev(ptlist)
+    
     #get the max visit for every batch
     ptlen = []
     maxtemp = []
@@ -312,7 +342,8 @@ def update_batch(ptlist):
             dl.append(ptb[b][p][2])
             ll.append(ptb[b][p][3])
             ml.append(ptb[b][p][5])
-            tdl.append(ptb[b][p][7])           
+            tdl.append(ptb[b][p][7])
+            
             ptl.append(ptb[b][p][6])
             vl.append(ptb[b][p][8])
             vcl.append(ptb[b][p][9])
@@ -326,7 +357,8 @@ def update_batch(ptlist):
     bpt = dev(ptl)
     bv = dev(vl)
     bvc = dev(vcl)
-     
+    
+    
     #remain the same format as original tensors
     def toarray(batchlist):
         for i in range(len(batchlist)):
@@ -357,35 +389,58 @@ def duplicate_file(file, loc, sim_type, real_data, step):
         new_file = f"{file_name_without_ext}_{loc}_{sim_type}_{real_data}_{step}.{file_extension}"
     elif step == 'step2':
         new_name = file_name_without_ext[:-1]
-        new_file = f"{new_name}2.{file_extension}"    
+        new_file = f"{new_name}2.{file_extension}"
+    
     # Create the full source and destination paths
     destination_path = file.replace(file, new_file)
     # Duplicate the file
-    shutil.copy2(file, destination_path)    
-    print(f"{file} successfully duplicated as {new_file}.")   
+    shutil.copy2(file, destination_path)
+    
+    print(f"{file} successfully duplicated as {new_file}.")
+    
     return new_file
 
 
 def get_concn(model, loader):
-    result = {}    
+    result = {}
+    
     for group in loader:
-        eta1, eta2, eta3, eta4, _, _, _, _, lb, pred_con, ccl, d, td, _, LengList, PtList, _ = model(group)        
+        eta1, eta2, eta3, eta4, _, _, _, _, lb, pred_con, ccl, d, td, _, LengList, PtList, _, _ = model(group)
+        
         for i in range(len(group[0])):    
             result[PtList[i]] = pred_con[i].cpu().detach().numpy()
     
     return result
 
+
+def get_concn_1cm(model, loader):
+    result = {}
+    
+    for group in loader:
+        # PKRNN returns 13 items:
+        # K, V, lb, output, d, td/24, mask, v_from_weight, LengList, PtList, outEmb, loss, auc
+        _, _, _, pred_con, _, _, _, _, _, PtList, _, _, _ = model(group)
+        
+        for i in range(len(group[0])):    
+            result[PtList[i]] = pred_con[i].cpu().detach().numpy()
+    
+    return result
+
+
 def simulate(org_dataset, dataset, concn, sim_type, real_data):
-    ptcheck, idxl_check = get_ptlist(org_dataset)   
+    ptcheck, idxl_check = get_ptlist(org_dataset)
+    
     if sim_type == 'move':
         ptd = {}
         for ptc in range(len(ptcheck)):
             pt_id = ptcheck[ptc][6]     #PtList
             td_check = 24 * ptcheck[ptc][7]
-            ptd[pt_id] = td_check        
+            ptd[pt_id] = td_check
+        
         # Iterate over the groups
         for group_name in dataset.keys():
-            group = dataset[group_name]            
+            group = dataset[group_name]
+            
             td = group['TimeDiffTensor'][:]
             td *= 24
             #other features that may change based on td 
@@ -393,41 +448,53 @@ def simulate(org_dataset, dataset, concn, sim_type, real_data):
             m = group['MaskTensor'][:]
             #won't change for any options
             pt_list = group['PtList'][:]
-            if len(pt_list) == 50:
-                for idx in range(len(pt_list)):        
-                    ptid = pt_list[idx]
-                    lbi = lb[idx]
-                    mi = m[idx]                  
-                    t = np.cumsum(td[idx])
-                    t = np.insert(t, 0, 0)
-                    t = np.delete(t, -1)
 
-                    for tdk in ptd.keys():
-                        if int(tdk) == ptid:
-                            oldtd = ptd[tdk]
-                    #get the output for this patient
-                    for outk in concn.keys():
-                        if int(outk) == ptid:
-                            output = concn[outk]                    
-                    
-                    oldt = np.cumsum(oldtd)
-                    oldt = np.insert(oldt, 0, 0)
-                    oldt = np.delete(oldt, -1)
-                    #index list for different elements 
-                    tidx = np.arange(t.shape[0])[np.in1d(t,oldt)]
-                    tidx_n = np.arange(t.shape[0])[~np.in1d(t,oldt)]
+            for idx in range(len(pt_list)):        
+                ptid = pt_list[idx]
+                lbi = lb[idx]
+                mi = m[idx]
                 
-                    if len(tidx_n) > 0:
-                        for i in tidx_n:
-                            lbi[i] = output[i]
-                        if real_data == 'remove':
-                            for j in tidx:
-                                lbi[j] = 0
-                    mi = np.where(lbi==0, 0, 1)
-                    lb[idx] = lbi
-                    m[idx] = mi  
+                t = np.cumsum(td[idx])
+                t = np.insert(t, 0, 0)
+                t = np.delete(t, -1)
+
+                for tdk in ptd.keys():
+                    if int(tdk) == ptid:
+                        oldtd = ptd[tdk]
+                #get the output for this patient
+                for outk in concn.keys():
+                    if int(outk) == ptid:
+                        output = concn[outk]                    
+                
+                oldt = np.cumsum(oldtd)
+                oldt = np.insert(oldt, 0, 0)
+                oldt = np.delete(oldt, -1)
+                #match positions sequentially (merge-based) to handle duplicate times correctly
+                tidx, tidx_n = [], []
+                j_ptr = 0  #pointer into oldt
+                for i_ptr in range(len(t)):
+                    if j_ptr < len(oldt) and np.isclose(t[i_ptr], oldt[j_ptr]):
+                        tidx.append(i_ptr)
+                        j_ptr += 1
+                    else:
+                        tidx_n.append(i_ptr)
+                tidx = np.array(tidx)
+                tidx_n = np.array(tidx_n)
+            
+                if len(tidx_n) > 0:
+                    for i in tidx_n:
+                        lbi[i] = output[i]
+                    if real_data == 'remove':
+                        for j in tidx:
+                            lbi[j] = 0
+                mi = np.where(lbi==0, 0, 1)
+
+                lb[idx] = lbi
+                m[idx] = mi
+  
             group['LabelTensor'][:] = lb
             group['MaskTensor'][:] = m
+
     
     else:
         #get patient data as a list
@@ -440,24 +507,36 @@ def simulate(org_dataset, dataset, concn, sim_type, real_data):
         #delete original batch and update them using new data
         for b in idxl_str:
             del dataset[b]['CatTensor']
-            dataset[b].create_dataset('CatTensor', data = bcat[int(b)])            
+            dataset[b].create_dataset('CatTensor', data = bcat[int(b)])
+            
             del dataset[b]['ContTensor']
             dataset[b].create_dataset('ContTensor', data = bcont[int(b)])
+            
             del dataset[b]['DoseTensor']
-            dataset[b].create_dataset('DoseTensor', data = bd[int(b)])            
+            dataset[b].create_dataset('DoseTensor', data = bd[int(b)])
+            
             del dataset[b]['LabelTensor']
-            dataset[b].create_dataset('LabelTensor', data = bl[int(b)])            
+            dataset[b].create_dataset('LabelTensor', data = bl[int(b)])
+            
             del dataset[b]['LengList']
-            dataset[b].create_dataset('LengList', data = blen[int(b)])            
+            dataset[b].create_dataset('LengList', data = blen[int(b)])
+            
             del dataset[b]['MaskTensor']
-            dataset[b].create_dataset('MaskTensor', data = bm[int(b)])            
+            dataset[b].create_dataset('MaskTensor', data = bm[int(b)])
+            
             del dataset[b]['TimeDiffTensor']
-            dataset[b].create_dataset('TimeDiffTensor', data = btd[int(b)])                   
+            dataset[b].create_dataset('TimeDiffTensor', data = btd[int(b)])
+            
+        
             del dataset[b]['PtList']
-            dataset[b].create_dataset('PtList', data = bpt[int(b)])            
+            dataset[b].create_dataset('PtList', data = bpt[int(b)])
+            
             del dataset[b]['VTensor']
-            dataset[b].create_dataset('VTensor', data = bv[int(b)])           
+            dataset[b].create_dataset('VTensor', data = bv[int(b)])
+            
             del dataset[b]['VancoClTensor']
             dataset[b].create_dataset('VancoClTensor', data = bvc[int(b)])
         
-    return dataset   
+    return dataset
+    
+    
